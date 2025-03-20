@@ -3,12 +3,16 @@ import { ProductList } from "@/components/product-list"
 import { SearchForm } from "@/components/search-form"
 import { searchProducts } from "@/lib/actions"
 
+export const dynamic = 'force-dynamic';
+
 export default async function Home({
   searchParams,
 }: {
   searchParams: { query?: string }
 }) {
-  const query = searchParams.query || ""
+  // Get search params in a way that satisfies Next.js
+  const searchParamsData = await Promise.resolve(searchParams);
+  const query = typeof searchParamsData.query === 'string' ? searchParamsData.query : "";
   const products = query ? await searchProducts(query) : []
 
   return (

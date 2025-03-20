@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { groq } from '@ai-sdk/groq';
-import { generateText } from 'ai';
+import { OpenAI } from 'openai';
+
+// Initialize OpenAI with GROQ's API URL for compatibility
+const openai = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY || '',
+  baseURL: 'https://api.groq.com/openai/v1',
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +16,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No image provided' }, { status: 400 });
     }
 
+    // Convert the image to base64
     const arrayBuffer = await imageFile.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const base64Image = buffer.toString('base64');
@@ -19,34 +25,29 @@ export async function POST(request: NextRequest) {
 
     const promptText = 'This is a grocery receipt or product price tag. Extract the product title and price in JSON format. The response should ONLY include a JSON object with format { price: number, title: string }. Do not include any explanations or other text.';
 
-    const result = await generateText({
-      model: groq("llama-3.1-8b-instant"),
-      maxTokens: 512,
+    // Use llama-3.2-11b-vision-preview model which supports vision
+    const response = await openai.chat.completions.create({
+      model: 'llama-3.2-11b-vision-preview',
       messages: [
         {
           role: 'user',
           content: [
+            { type: 'text', text: promptText },
             {
-              type: 'text',
-              text: promptText,
-            },
-            {
-              type: 'image',
-              image: new URL(
-                dataURI,
-              ),
-            },
-          ],
-        },
+              type: 'image_url',
+              image_url: { url: dataURI }
+            }
+          ]
+        }
       ],
-      experimental_telemetry: {
-        isEnabled: true,
-      },
+      max_tokens: 512,
     });
 
-    const content = result.text || '';
+    // Get the response text
+    const content = response.choices[0]?.message?.content || '';
 
     try {
+      // Try to extract JSON object from response
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       const jsonString = jsonMatch ? jsonMatch[0] : content;
       const parsedData = JSON.parse(jsonString);
