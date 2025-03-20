@@ -1,11 +1,13 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { cookies } from 'next/headers'
 import { extractProductInfo } from "@/lib/utils"
 import type { Product } from "@/lib/types"
 
 export async function searchProducts(query: string): Promise<Product[]> {
-  const supabase = await createClient()
+  const cookieStore = cookies()
+  const supabase = createClient(cookieStore)
 
   const { data, error } = await supabase
     .from("products")
@@ -19,7 +21,6 @@ export async function searchProducts(query: string): Promise<Product[]> {
     return []
   }
 
-  // Transform the data to match the Product interface
   return (data || []).map(item => ({
     id: item.id,
     created_at: item.created_at,
@@ -97,7 +98,8 @@ export async function processProductImage(formData: FormData) {
       const arrayBuffer = await imageFile.arrayBuffer()
       const buffer = Buffer.from(arrayBuffer)
 
-      const supabase = await createClient()
+      const cookieStore = cookies()
+      const supabase = createClient(cookieStore)
 
       const { data: storageData, error: storageError } = await supabase.storage
         .from("product-images")

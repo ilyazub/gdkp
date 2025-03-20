@@ -10,7 +10,6 @@ export default async function Home({
 }: {
   searchParams: { query?: string }
 }) {
-  // Get search params in a way that satisfies Next.js
   const searchParamsData = await Promise.resolve(searchParams);
   const query = typeof searchParamsData.query === 'string' ? searchParamsData.query : "";
   const products = query ? await searchProducts(query) : []
