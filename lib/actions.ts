@@ -4,17 +4,13 @@ import { createClient } from "@/lib/supabase/server"
 import { extractProductInfo } from "@/lib/utils"
 import type { Product } from "@/lib/types"
 
-// Only check for Groq API key
-const hasGroqAPI = !!process.env.GROQ_API_KEY
-console.log(`Using Groq API: ${hasGroqAPI ? 'Yes' : 'No - check API key'}`);
-
 export async function searchProducts(query: string): Promise<Product[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase
     .from("products")
     .select("*")
-    .ilike("name", `%${query}%`)
+    .ilike("data->>'name'", `%${query}%`)
     .order("created_at", { ascending: false })
     .limit(20)
 
@@ -23,7 +19,13 @@ export async function searchProducts(query: string): Promise<Product[]> {
     return []
   }
 
-  return data || []
+  // Transform the data to match the Product interface
+  return (data || []).map(item => ({
+    id: item.id,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+    ...item.data
+  }));
 }
 
 export async function processProductImage(formData: FormData) {
@@ -95,7 +97,7 @@ export async function processProductImage(formData: FormData) {
       const arrayBuffer = await imageFile.arrayBuffer()
       const buffer = Buffer.from(arrayBuffer)
 
-      const supabase = createClient()
+      const supabase = await createClient()
 
       const { data: storageData, error: storageError } = await supabase.storage
         .from("product-images")
@@ -112,6 +114,7 @@ export async function processProductImage(formData: FormData) {
         data: { publicUrl },
       } = supabase.storage.from("product-images").getPublicUrl(storageData.path)
 
+      // Store all product data in the JSONB data field
       const { error: insertError } = await supabase.from("products").insert({
         name: productName,
         price: price,

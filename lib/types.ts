@@ -8,6 +8,8 @@ export interface Product {
   ocr_text?: string
   created_at: string
   updated_at: string
+  // Add additional fields for future extensibility
+  [key: string]: any
 }
 
 export interface OcrResult {

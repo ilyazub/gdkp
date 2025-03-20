@@ -18,6 +18,8 @@ export function UploadForm() {
   const [loading, setLoading] = useState(false)
   const [ocrResult, setOcrResult] = useState<string | null>(null)
   const [extractedData, setExtractedData] = useState<{ title?: string; price?: number } | null>(null)
+  const [editableProductName, setEditableProductName] = useState<string>("")
+  const [editablePrice, setEditablePrice] = useState<string>("")
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -166,6 +168,9 @@ export function UploadForm() {
         // If we have extracted data from the AI, store it
         if (response.extractedData) {
           setExtractedData(response.extractedData)
+          // Set editable fields with AI-detected values
+          setEditableProductName(response.extractedData.title || "")
+          setEditablePrice(response.extractedData.price?.toString() || "")
           console.log("AI Extracted Data:", response.extractedData)
         }
       } else {
@@ -201,9 +206,12 @@ export function UploadForm() {
     setResult(null)
 
     try {
+      // Create a new OCR text with edited values
+      const editedOcrText = `Product: ${editableProductName}\nPrice: ${editablePrice}`
+      
       const formData = new FormData()
       formData.append("image", file)
-      formData.append("ocrText", ocrResult)
+      formData.append("ocrText", editedOcrText)
       formData.append("action", "save")
 
       const result = await processProductImage(formData)
@@ -215,6 +223,8 @@ export function UploadForm() {
         setPreview(null)
         setOcrResult(null)
         setExtractedData(null)
+        setEditableProductName("")
+        setEditablePrice("")
         if (fileInputRef.current) {
           fileInputRef.current.value = ""
         }
@@ -302,18 +312,30 @@ export function UploadForm() {
       )}
 
       {extractedData && (
-        <div className="p-4 bg-green-50 border border-green-200 rounded-md space-y-2">
-          <div className="font-medium">AI-Detected Information:</div>
-          {extractedData.title && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-md space-y-4">
+          <div className="font-medium">AI-Detected Information (You can edit):</div>
+          <div className="space-y-3">
             <div>
-              <span className="font-medium">Product:</span> {extractedData.title}
+              <Label htmlFor="productName">Product Name:</Label>
+              <Input 
+                id="productName" 
+                value={editableProductName} 
+                onChange={(e) => setEditableProductName(e.target.value)}
+                className="mt-1"
+              />
             </div>
-          )}
-          {extractedData.price !== undefined && (
             <div>
-              <span className="font-medium">Price:</span> {extractedData.price.toFixed(2)}
+              <Label htmlFor="productPrice">Price:</Label>
+              <Input 
+                id="productPrice" 
+                type="number" 
+                step="0.01"
+                value={editablePrice} 
+                onChange={(e) => setEditablePrice(e.target.value)}
+                className="mt-1"
+              />
             </div>
-          )}
+          </div>
         </div>
       )}
 
