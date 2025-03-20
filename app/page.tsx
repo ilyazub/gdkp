@@ -1,6 +1,6 @@
-import { SearchForm } from "@/components/search-form"
 import { UploadForm } from "@/components/upload-form"
 import { ProductList } from "@/components/product-list"
+import { SearchForm } from "@/components/search-form"
 import { searchProducts } from "@/lib/actions"
 
 export default async function Home({
@@ -13,7 +13,7 @@ export default async function Home({
 
   return (
     <main className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6">GDKP - Grocery Price Tracker</h1>
+      <h1 className="text-3xl font-bold mb-4">GDKP - Grocery Price Tracker</h1>
 
       <div className="grid gap-8 md:grid-cols-2">
         <div>

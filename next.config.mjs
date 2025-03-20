@@ -21,6 +21,9 @@ const nextConfig = {
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
   },
+  serverRuntimeConfig: {
+    maxDuration: 60,
+  }
 }
 
 mergeConfig(nextConfig, userConfig)

@@ -4,6 +4,8 @@ export interface Product {
   price: number
   currency?: string
   location?: string
+  image_url?: string
+  ocr_text?: string
   created_at: string
   updated_at: string
 }
