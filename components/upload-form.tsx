@@ -44,14 +44,12 @@ export function UploadForm() {
             setOcrResult(null)
             setExtractedData(null)
 
-            // Create preview
             const reader = new FileReader()
             reader.onload = (e) => {
               setPreview(e.target?.result as string)
             }
             reader.readAsDataURL(pastedFile)
 
-            // Process the image with AI
             await processImageWithAI(pastedFile)
           }
         }
@@ -101,14 +99,12 @@ export function UploadForm() {
           setOcrResult(null)
           setExtractedData(null)
 
-          // Create preview
           const reader = new FileReader()
           reader.onload = (e) => {
             setPreview(e.target?.result as string)
           }
           reader.readAsDataURL(droppedFile)
 
-          // Process the image with AI
           await processImageWithAI(droppedFile)
         } else {
           setResult({
@@ -146,7 +142,6 @@ export function UploadForm() {
       }
       reader.readAsDataURL(selectedFile)
 
-      // Process the image with AI
       await processImageWithAI(selectedFile)
     }
   }
@@ -154,21 +149,18 @@ export function UploadForm() {
   const processImageWithAI = async (imageFile: File) => {
     setLoading(true)
     try {
-      // Create a FormData object to send the image to our server action
       const formData = new FormData()
       formData.append("image", imageFile)
       formData.append("action", "ocr")
 
-      // Call the server action to process the image
       const response = await processProductImage(formData)
 
       if (response.success && response.ocrText) {
         setOcrResult(response.ocrText)
         
-        // If we have extracted data from the AI, store it
         if (response.extractedData) {
           setExtractedData(response.extractedData)
-          // Set editable fields with AI-detected values
+
           setEditableProductName(response.extractedData.title || "")
           setEditablePrice(response.extractedData.price?.toString() || "")
           console.log("AI Extracted Data:", response.extractedData)
@@ -206,19 +198,19 @@ export function UploadForm() {
     setResult(null)
 
     try {
-      // Create a new OCR text with edited values
       const editedOcrText = `Product: ${editableProductName}\nPrice: ${editablePrice}`
       
       const formData = new FormData()
       formData.append("image", file)
       formData.append("ocrText", editedOcrText)
+      formData.append("productName", editableProductName)
+      formData.append("productPrice", editablePrice)
       formData.append("action", "save")
 
       const result = await processProductImage(formData)
       setResult(result)
 
       if (result.success) {
-        // Clear form on success
         setFile(null)
         setPreview(null)
         setOcrResult(null)
@@ -229,7 +221,6 @@ export function UploadForm() {
           fileInputRef.current.value = ""
         }
 
-        // Refresh the page data after successful upload
         router.refresh()
       }
     } catch (error) {
@@ -249,11 +240,10 @@ export function UploadForm() {
   }
 
   const handlePasteClick = () => {
-    // Focus on the form to enable clipboard paste events
     if (formRef.current) {
       formRef.current.focus()
     }
-    // Prompt user to paste
+
     setResult({
       success: true,
       message: "Press Ctrl+V or Cmd+V to paste an image from clipboard",
@@ -346,7 +336,7 @@ export function UploadForm() {
         </div>
       )}
 
-      <Button type="submit" disabled={!file || loading || !ocrResult} className="w-full">
+      <Button type="submit" disabled={!file || loading || !ocrResult || !extractedData} className="w-full">
         {loading ? (
           <>
             <Loader2 className="h-4 w-4 mr-2 animate-spin" />

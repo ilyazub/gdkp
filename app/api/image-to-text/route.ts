@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { OpenAI } from 'openai';
 
 const openai = new OpenAI({
-  apiKey: process.env.GROQ_API_KEY || '',
-  baseURL: 'https://api.groq.com/openai/v1',
+  apiKey: process.env.OPENROUTER_API_KEY || '',
+  baseURL: 'https://openrouter.ai/api/v1',
+  defaultHeaders: {
+    'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    "X-Title": "Gde Kupit",
+    "X-Description": "Gde Kupit is a website that helps you find the best deals on products in your area."
+  },
 });
 
 export async function POST(request: NextRequest) {
@@ -21,11 +26,47 @@ export async function POST(request: NextRequest) {
     const mimeType = imageFile.type;
     const dataURI = `data:${mimeType};base64,${base64Image}`;
 
-    const promptText = 'This is a grocery receipt or product price tag. Extract the product title and price in JSON format. The response should ONLY include a JSON object with format { price: number, title: string }. Do not include any explanations or other text.';
+    const promptText = `You are a JSON-only response bot. Your task is to analyze the image and output ONLY a valid JSON string (RFC 8259) with no additional text, no markdown formatting, no backticks, no explanations.
+
+Analyze this grocery receipt or product price tag image. Extract the product information following these rules:
+
+1. For each distinct product, output a JSON string with:
+   - title: string (full product name, preserve original language)
+   - price: number (numeric value only, no currency symbols)
+   - currency: string (3-letter currency code, e.g., "USD", "EUR")
+
+2. Format requirements:
+   - Output must be ONLY the raw JSON string (RFC 8259)
+   - NO markdown formatting
+   - NO backticks
+   - NO additional text or explanations
+   - Price should be a number (not a string)
+   - Currency should be in ISO 4217 format
+   - Title should be the complete product name
+
+3. Special cases:
+   - If multiple items are visible, output an array of objects
+   - If price is missing, use null
+   - If currency is not visible, guess it from the price and title
+   - Remove any special characters from prices
+   - Preserve original language for titles
+
+4. Product title correction:
+   - Correct product titles by looking at each word and update ones that are missing logical sense
+   - For example: "Твор." should be corrected to "творог"
+   - Apply common sense corrections while preserving the original language
+   - Only correct obvious abbreviations or incomplete words
+
+Remember: Output ONLY the raw JSON string, nothing else.`;
 
     const response = await openai.chat.completions.create({
-      model: 'llama-3.2-11b-vision-preview',
+      // model: 'openrouter/auto',
+      model: 'google/gemini-2.0-flash-001',
       messages: [
+        {
+          role: 'system',
+          content: 'You are a JSON-only response bot. You must output ONLY valid JSON strings (RFC 8259) with no additional text, no markdown formatting, no backticks, and no explanations.'
+        },
         {
           role: 'user',
           content: [
@@ -37,15 +78,18 @@ export async function POST(request: NextRequest) {
           ]
         }
       ],
+      response_format: {
+        type: 'json_object'
+      },
       max_tokens: 512,
     });
 
     const content = response.choices[0]?.message?.content || '';
 
+    console.dir(content);
+
     try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      const jsonString = jsonMatch ? jsonMatch[0] : content;
-      const parsedData = JSON.parse(jsonString);
+      const parsedData = JSON.parse(content);
 
       return NextResponse.json(parsedData);
     } catch (error) {

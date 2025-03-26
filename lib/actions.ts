@@ -2,7 +2,6 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { cookies } from 'next/headers'
-import { extractProductInfo } from "@/lib/utils"
 import type { Product } from "@/lib/types"
 
 export async function searchProducts(query: string): Promise<Product[]> {
@@ -42,9 +41,7 @@ export async function processProductImage(formData: FormData) {
       const aiFormData = new FormData()
       aiFormData.append("image", imageFile)
       
-      const origin = process.env.NEXT_PUBLIC_SITE_URL || 
-                    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
-                    'http://localhost:3000';
+      const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
       
       const response = await fetch(`${origin}/api/image-to-text`, {
         method: "POST",
@@ -81,17 +78,24 @@ export async function processProductImage(formData: FormData) {
 
     if (action === "save") {
       const ocrText = formData.get("ocrText") as string
+      const productName = formData.get("productName") as string
+      const productPrice = formData.get("productPrice") as string
+      const productCurrency = formData.get("productCurrency") as string
 
-      if (!ocrText) {
-        return { success: false, message: "No OCR text provided" }
+      // Validate required fields
+      if (!productName || !productPrice) {
+        return { 
+          success: false, 
+          message: "Product name and price are required" 
+        }
       }
 
-      const { productName, price, currency } = extractProductInfo(ocrText)
-
-      if (!productName || !price) {
-        return {
-          success: false,
-          message: "Could not extract product name and price from the OCR text.",
+      // Validate price is a valid number
+      const price = parseFloat(productPrice)
+      if (isNaN(price)) {
+        return { 
+          success: false, 
+          message: "Invalid price format" 
         }
       }
 
@@ -101,28 +105,30 @@ export async function processProductImage(formData: FormData) {
       const cookieStore = cookies()
       const supabase = createClient(cookieStore)
 
-      const { data: storageData, error: storageError } = await supabase.storage
-        .from("product-images")
-        .upload(`${Date.now()}-${imageFile.name}`, buffer, {
-          contentType: imageFile.type,
-        })
+      // const { data: storageData, error: storageError } = await supabase.storage
+      //   .from("product-images")
+      //   .upload(`${Date.now()}-${imageFile.name}`, buffer, {
+      //     contentType: imageFile.type,
+      //   })
 
-      if (storageError) {
-        console.error("Error uploading image:", storageError)
-        return { success: false, message: "Failed to upload image" }
-      }
+      // if (storageError) {
+      //   console.error("Error uploading image:", storageError)
+      //   console.error("StorageData:", storageData)
+      //   return { success: false, message: "Failed to upload image" }
+      // }
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("product-images").getPublicUrl(storageData.path)
+      // const {
+      //   data: { publicUrl },
+      // } = supabase.storage.from("product-images").getPublicUrl(storageData.path)
 
-      // Store all product data in the JSONB data field
       const { error: insertError } = await supabase.from("products").insert({
-        name: productName,
-        price: price,
-        currency: currency || "USD",
-        image_url: publicUrl,
-        ocr_text: ocrText,
+        data: {
+          name: productName,
+          price: productPrice,
+          currency: productCurrency || "USD",
+          // image_url: publicUrl,
+          ocr_text: ocrText,
+        }
       })
 
       if (insertError) {
@@ -132,7 +138,7 @@ export async function processProductImage(formData: FormData) {
 
       return {
         success: true,
-        message: `Successfully extracted and saved "${productName}" with price ${price} ${currency || "USD"}`,
+        message: `Successfully extracted and saved "${productName}" with price ${productPrice} ${productCurrency || "USD"}`,
       }
     }
 
