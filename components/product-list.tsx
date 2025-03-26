@@ -13,7 +13,9 @@ export function ProductList({ products, limit = 15 }: { products: Product[], lim
   // Take only the specified number of products
   const displayedProducts = products.slice(0, limit)
 
-  const formatCurrency = (price: number, currency: string) => {
+  const formatCurrency = (price: number | null, currency: string) => {
+    if (price === null) return "Price not available";
+    
     const symbol = currency === "UAH" ? "₴" : 
                   currency === "PLN" ? "zł" : 
                   currency === "USD" ? "$" : 
@@ -38,7 +40,7 @@ export function ProductList({ products, limit = 15 }: { products: Product[], lim
                   {product.currency}
                 </Badge>
               </div>
-              <p className="text-2xl font-bold text-primary">
+              <p className={`text-2xl font-bold ${product.price === null ? 'text-muted-foreground' : 'text-primary'}`}>
                 {formatCurrency(product.price, product.currency)}
               </p>
               <div className="flex items-center justify-between text-sm text-muted-foreground border-t pt-3">

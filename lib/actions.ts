@@ -166,6 +166,7 @@ export async function processProductImage(formData: FormData): Promise<ApiRespon
     const imageFile = formData.get("image") as File
     const action = formData.get("action") as string
     const locationJson = formData.get("location") as string
+    const imageUrl = formData.get("imageUrl") as string
 
     if (!imageFile) {
       return {
@@ -270,45 +271,7 @@ export async function processProductImage(formData: FormData): Promise<ApiRespon
               }
             }
           }
-          if (product.price === null || product.price === undefined || isNaN(Number(product.price))) {
-            return {
-              success: false,
-              error: {
-                code: ErrorCodes.INVALID_INPUT,
-                message: "Invalid price format"
-              }
-            }
-          }
         }
-
-        // Compress and upload image to Supabase Storage
-        const compressedImage = await compressImage(imageFile)
-        const timestamp = Date.now()
-        const filePath = `product-images/${timestamp}.jpg`
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('product-images')
-          .upload(filePath, compressedImage, {
-            cacheControl: '3600',
-            upsert: false,
-            contentType: 'image/jpeg'
-          })
-
-        if (uploadError) {
-          console.error("Error uploading image:", uploadError)
-          return {
-            success: false,
-            error: {
-              code: ErrorCodes.STORAGE_ERROR,
-              message: "Failed to upload product image",
-              details: uploadError
-            }
-          }
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(filePath)
 
         const { error: insertError } = await supabase.from("products").insert(
           products.map(product => ({
@@ -317,7 +280,7 @@ export async function processProductImage(formData: FormData): Promise<ApiRespon
               price: product.price,
               currency: product.currency || "UAH",
               ocr_text: product.text,
-              image_url: publicUrl,
+              image_url: imageUrl,
               location: location
             }
           }))
@@ -368,6 +331,59 @@ export async function processProductImage(formData: FormData): Promise<ApiRespon
       error: {
         code: ErrorCodes.PROCESSING_ERROR,
         message: "An error occurred while processing the image",
+        details: error
+      }
+    }
+  }
+}
+
+export async function uploadImage(file: File): Promise<ApiResponse<{ url: string }>> {
+  try {
+    const cookieStore = cookies()
+    const supabase = createClient(cookieStore)
+
+    // Compress image before upload
+    const compressedImage = await compressImage(file)
+    const timestamp = Date.now()
+    const filePath = `product-images/${timestamp}.jpg`
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('product-images')
+      .upload(filePath, compressedImage, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: 'image/jpeg'
+      })
+
+    if (uploadError) {
+      console.error("Error uploading image:", uploadError)
+      return {
+        success: false,
+        error: {
+          code: ErrorCodes.STORAGE_ERROR,
+          message: "Failed to upload product image",
+          details: uploadError
+        }
+      }
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('product-images')
+      .getPublicUrl(filePath)
+
+    return {
+      success: true,
+      data: {
+        url: publicUrl
+      }
+    }
+  } catch (error) {
+    console.error("Error uploading image:", error)
+    return {
+      success: false,
+      error: {
+        code: ErrorCodes.STORAGE_ERROR,
+        message: "Failed to upload product image",
         details: error
       }
     }

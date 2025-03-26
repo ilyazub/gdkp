@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Upload, Loader2, Camera, Clipboard, ZoomIn, Trash2 } from "lucide-react"
-import { processProductImage } from "@/lib/actions"
+import { processProductImage, uploadImage } from "@/lib/actions"
 import type { OcrResult } from "@/lib/types"
 import { compressImage, extractExifData } from "@/lib/utils"
 import { ImageZoomModal } from "@/components/image-zoom-modal"
@@ -27,13 +27,14 @@ export function UploadForm() {
   const formRef = useRef<HTMLFormElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
 
   const processFile = async (file: File) => {
-    // Check file size (4MB limit)
-    if (file.size > 4 * 1024 * 1024) {
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
       setResult({
         success: false,
-        message: "File size must be less than 4MB",
+        message: "File size must be less than 10MB",
       })
       return
     }
@@ -43,6 +44,7 @@ export function UploadForm() {
     setOcrResult(null)
     setExtractedProducts([])
     setLocation({ name: "", address: "" })
+    setImageUrl(null)
 
     // Try to extract location from image metadata
     try {
@@ -64,9 +66,24 @@ export function UploadForm() {
     }
     reader.readAsDataURL(file)
 
-    // Compress image before processing
-    const compressedFile = await compressImage(file)
-    await processImageWithAI(compressedFile)
+    // Upload image first
+    try {
+      const uploadResponse = await uploadImage(file)
+      if (!uploadResponse.success) {
+        throw new Error(uploadResponse.error?.message || "Failed to upload image")
+      }
+      setImageUrl(uploadResponse.data?.url || null)
+
+      // Then process with AI
+      const compressedFile = await compressImage(file)
+      await processImageWithAI(compressedFile)
+    } catch (error) {
+      console.error('Error processing file:', error)
+      setResult({
+        success: false,
+        message: 'Failed to process image. Please try again.',
+      })
+    }
   }
 
   // Setup clipboard paste event listener
@@ -194,7 +211,7 @@ export function UploadForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!file || extractedProducts.length === 0) return
+    if (!file || !imageUrl || extractedProducts.length === 0) return
 
     setLoading(true)
     try {
@@ -203,6 +220,7 @@ export function UploadForm() {
       formData.append("action", "save")
       formData.append("products", JSON.stringify(extractedProducts))
       formData.append("location", JSON.stringify(location))
+      formData.append("imageUrl", imageUrl)
 
       const response = await processProductImage(formData)
       setResult({
@@ -216,6 +234,7 @@ export function UploadForm() {
         setOcrResult(null)
         setExtractedProducts([])
         setLocation({ name: "", address: "" })
+        setImageUrl(null)
         if (fileInputRef.current) {
           fileInputRef.current.value = ""
         }
@@ -480,10 +499,7 @@ export function UploadForm() {
       <Button 
         type="submit" 
         disabled={!file || loading || !extractedProducts.length || extractedProducts.some(p => 
-          !p.productName?.trim() || 
-          p.price === null || 
-          p.price === undefined || 
-          isNaN(Number(p.price))
+          !p.productName?.trim()
         )} 
         className="w-full"
       >

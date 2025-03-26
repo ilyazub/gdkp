@@ -6,7 +6,9 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatPrice(price: number, currency = "USD"): string {
+export function formatPrice(price: number | null, currency = "USD"): string {
+  if (price === null) return "Price not available";
+  
   // Use a simpler approach that doesn't depend on locale
   const formatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
