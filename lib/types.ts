@@ -9,13 +9,13 @@ export interface Product {
   created_at: string
   updated_at: string
   // Add additional fields for future extensibility
-  [key: string]: any
+  [key: string]: string | number | undefined
 }
 
 export interface OcrResult {
   text: string
   productName?: string
-  price?: number
+  price: number | null
   currency?: string
 }
 

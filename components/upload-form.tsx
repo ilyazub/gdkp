@@ -11,21 +11,65 @@ import { Card } from "@/components/ui/card"
 import { Upload, Loader2, Camera, Clipboard } from "lucide-react"
 import { processProductImage } from "@/lib/actions"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import type { OcrResult } from "@/lib/types"
+import imageCompression from 'browser-image-compression'
 
 export function UploadForm() {
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [ocrResult, setOcrResult] = useState<string | null>(null)
-  const [extractedData, setExtractedData] = useState<{ title?: string; price?: number } | null>(null)
-  const [editableProductName, setEditableProductName] = useState<string>("")
-  const [editablePrice, setEditablePrice] = useState<string>("")
+  const [extractedProducts, setExtractedProducts] = useState<OcrResult[]>([])
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+
+  const compressImage = async (file: File): Promise<File> => {
+    const options = {
+      maxSizeMB: 2,
+      maxWidthOrHeight: 1920,
+      useWebWorker: true,
+      fileType: file.type,
+      initialQuality: 1, // Lossless compression
+    }
+
+    try {
+      const compressedFile = await imageCompression(file, options)
+      return compressedFile
+    } catch (error) {
+      console.error('Error compressing image:', error)
+      return file
+    }
+  }
+
+  const processFile = async (file: File) => {
+    // Check file size (2MB limit)
+    if (file.size > 2 * 1024 * 1024) {
+      setResult({
+        success: false,
+        message: "File size must be less than 2MB",
+      })
+      return
+    }
+
+    setFile(file)
+    setResult(null)
+    setOcrResult(null)
+    setExtractedProducts([])
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setPreview(e.target?.result as string)
+    }
+    reader.readAsDataURL(file)
+
+    // Compress image before processing
+    const compressedFile = await compressImage(file)
+    await processImageWithAI(compressedFile)
+  }
 
   // Setup clipboard paste event listener
   useEffect(() => {
@@ -37,20 +81,8 @@ export function UploadForm() {
         if (items[i].type.indexOf("image") !== -1) {
           const blob = items[i].getAsFile()
           if (blob) {
-            // Convert blob to File object
             const pastedFile = new File([blob], "pasted-image.png", { type: blob.type })
-            setFile(pastedFile)
-            setResult(null)
-            setOcrResult(null)
-            setExtractedData(null)
-
-            const reader = new FileReader()
-            reader.onload = (e) => {
-              setPreview(e.target?.result as string)
-            }
-            reader.readAsDataURL(pastedFile)
-
-            await processImageWithAI(pastedFile)
+            await processFile(pastedFile)
           }
         }
       }
@@ -60,7 +92,7 @@ export function UploadForm() {
     return () => {
       document.removeEventListener("paste", handlePaste)
     }
-  }, [])
+  }, [processFile])
 
   // Setup drag and drop event listeners
   useEffect(() => {
@@ -94,18 +126,7 @@ export function UploadForm() {
       if (files && files.length > 0) {
         const droppedFile = files[0]
         if (droppedFile.type.indexOf("image") !== -1) {
-          setFile(droppedFile)
-          setResult(null)
-          setOcrResult(null)
-          setExtractedData(null)
-
-          const reader = new FileReader()
-          reader.onload = (e) => {
-            setPreview(e.target?.result as string)
-          }
-          reader.readAsDataURL(droppedFile)
-
-          await processImageWithAI(droppedFile)
+          await processFile(droppedFile)
         } else {
           setResult({
             success: false,
@@ -126,23 +147,12 @@ export function UploadForm() {
       dropZone.removeEventListener("dragleave", handleDragLeave)
       dropZone.removeEventListener("drop", handleDrop)
     }
-  }, [])
+  }, [processFile])
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0] || null
     if (selectedFile) {
-      setFile(selectedFile)
-      setResult(null)
-      setOcrResult(null)
-      setExtractedData(null)
-
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setPreview(e.target?.result as string)
-      }
-      reader.readAsDataURL(selectedFile)
-
-      await processImageWithAI(selectedFile)
+      await processFile(selectedFile)
     }
   }
 
@@ -155,14 +165,11 @@ export function UploadForm() {
 
       const response = await processProductImage(formData)
 
-      if (response.success && response.ocrText) {
-        setOcrResult(response.ocrText)
+      if (response.success && response.extractedData) {
+        setOcrResult(response.extractedData)
         
         if (response.extractedData) {
-          setExtractedData(response.extractedData)
-
-          setEditableProductName(response.extractedData.title || "")
-          setEditablePrice(response.extractedData.price?.toString() || "")
+          setExtractedProducts(response.extractedData)
           console.log("AI Extracted Data:", response.extractedData)
         }
       } else {
@@ -172,8 +179,8 @@ export function UploadForm() {
           message: response.message || "Image processing failed",
         })
       }
-    } catch (error) {
-      console.error("Image Processing Error:", error)
+    } catch (processError) {
+      console.error("Image Processing Error:", processError)
       setOcrResult("Image processing failed. Please try a clearer image.")
       setResult({
         success: false,
@@ -198,13 +205,10 @@ export function UploadForm() {
     setResult(null)
 
     try {
-      const editedOcrText = `Product: ${editableProductName}\nPrice: ${editablePrice}`
-      
       const formData = new FormData()
       formData.append("image", file)
-      formData.append("ocrText", editedOcrText)
-      formData.append("productName", editableProductName)
-      formData.append("productPrice", editablePrice)
+      formData.append("ocrText", ocrResult)
+      formData.append("products", JSON.stringify(extractedProducts))
       formData.append("action", "save")
 
       const result = await processProductImage(formData)
@@ -214,9 +218,7 @@ export function UploadForm() {
         setFile(null)
         setPreview(null)
         setOcrResult(null)
-        setExtractedData(null)
-        setEditableProductName("")
-        setEditablePrice("")
+        setExtractedProducts([])
         if (fileInputRef.current) {
           fileInputRef.current.value = ""
         }
@@ -301,42 +303,65 @@ export function UploadForm() {
         </Card>
       )}
 
-      {extractedData && (
-        <div className="p-4 bg-green-50 border border-green-200 rounded-md space-y-4">
-          <div className="font-medium">AI-Detected Information (You can edit):</div>
-          <div className="space-y-3">
-            <div>
-              <Label htmlFor="productName">Product Name:</Label>
-              <Input 
-                id="productName" 
-                value={editableProductName} 
-                onChange={(e) => setEditableProductName(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="productPrice">Price:</Label>
-              <Input 
-                id="productPrice" 
-                type="number" 
-                step="0.01"
-                value={editablePrice} 
-                onChange={(e) => setEditablePrice(e.target.value)}
-                className="mt-1"
-              />
-            </div>
+      {extractedProducts.length > 0 && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+          <div className="font-medium mb-3">AI-Detected Products (You can edit):</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {extractedProducts.map((product, index) => (
+              <div key={index} className="bg-white rounded-md border border-green-100 p-2.5">
+                <div className="grid grid-cols-[auto,1fr] gap-2 items-center">
+                  <Label htmlFor={`productName-${index}`} className="whitespace-nowrap text-xs">Name:</Label>
+                  <Input 
+                    id={`productName-${index}`}
+                    value={product.productName} 
+                    onChange={(e) => {
+                      const newProducts = [...extractedProducts]
+                      newProducts[index] = { ...product, productName: e.target.value, text: e.target.value }
+                      setExtractedProducts(newProducts)
+                    }}
+                    className="h-8 text-sm"
+                  />
+                  
+                  <Label htmlFor={`productPrice-${index}`} className="whitespace-nowrap text-xs">Price:</Label>
+                  <div className="flex gap-1">
+                    <Input 
+                      id={`productPrice-${index}`}
+                      type="number" 
+                      step="0.01"
+                      value={product.price || ''} 
+                      onChange={(e) => {
+                        const newProducts = [...extractedProducts]
+                        newProducts[index] = { ...product, price: e.target.value ? parseFloat(e.target.value) : null }
+                        setExtractedProducts(newProducts)
+                      }}
+                      className="h-8 text-sm"
+                    />
+                    <Input 
+                      id={`productCurrency-${index}`}
+                      value={product.currency} 
+                      onChange={(e) => {
+                        const newProducts = [...extractedProducts]
+                        newProducts[index] = { ...product, currency: e.target.value }
+                        setExtractedProducts(newProducts)
+                      }}
+                      className="h-8 text-sm w-16"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {ocrResult && !extractedData && (
+      {ocrResult && !extractedProducts.length && (
         <div className="p-3 bg-muted rounded-md">
           <Label>Extracted Text:</Label>
           <pre className="mt-2 text-sm whitespace-pre-wrap overflow-auto max-h-40">{ocrResult}</pre>
         </div>
       )}
 
-      <Button type="submit" disabled={!file || loading || !ocrResult || !extractedData} className="w-full">
+      <Button type="submit" disabled={!file || loading || !ocrResult || extractedProducts.length > 0} className="w-full">
         {loading ? (
           <>
             <Loader2 className="h-4 w-4 mr-2 animate-spin" />

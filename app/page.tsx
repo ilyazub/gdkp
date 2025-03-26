@@ -25,7 +25,7 @@ export default async function Home({
 
           {query && (
             <div className="mt-6">
-              <h3 className="text-lg font-medium mb-2">Results for "{query}"</h3>
+              <h3 className="text-lg font-medium mb-2">Results for &quot;{query}&quot;</h3>
               <ProductList products={products} />
             </div>
           )}

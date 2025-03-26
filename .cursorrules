@@ -1,0 +1,58 @@
+# Lessons
+
+## User Specified Lessons
+
+- You have a python venv in ./venv. Always use (activate) it when doing python development. First, to check whether 'uv' is available, use `which uv`. If that's the case, first activate the venv, and then use `uv pip install` to install packages. Otherwise, fall back to `pip`.
+- Due to Cursor's limit, when you use `git` and `gh` and need to submit a multiline commit message, first write the message in a file, and then use `git commit -F <filename>` or similar command to commit. And then remove the file. Include "[Cursor] " in the commit message and PR title.
+
+## Cursor learned
+
+- For search results, ensure proper handling of different character encodings (UTF-8) for international queries
+- When using seaborn styles in matplotlib, use 'seaborn-v0_8' instead of 'seaborn' as the style name due to recent seaborn version changes
+- Use 'gpt-4o' as the model name for OpenAI's GPT-4 with vision capabilities
+- When searching for recent news, use the current year (2025) instead of previous years, or simply use the "recent" keyword to get the latest information
+- The project uses Next.js with both `next.config.js` and `next.config.mjs`. The `.mjs` version is the main configuration file that includes experimental features and build optimizations
+- The project uses TypeScript, Tailwind CSS, and has a component-based architecture with separate directories for components, hooks, and styles
+
+# Scratchpad
+
+## Current Task: Clean up unneeded code in project
+[X] Removed duplicate CSS file from styles/globals.css
+[X] Removed unused placeholder images from public directory
+[X] Removed unused Radix UI dependencies and other unused packages from package.json
+[X] Run npm install to update package-lock.json
+[X] Fixed linting issues:
+  - Fixed unused variables in route.ts, actions.ts, middleware.ts, and server.ts
+  - Fixed unescaped entities in page.tsx
+  - Fixed useEffect dependencies in upload-form.tsx
+  - Fixed any type in types.ts 
+
+# JSON Rules
+
+## Format Rules
+- No trailing commas in arrays or objects
+- No comments in JSON output
+- No unnecessary whitespace
+- JSON should be minified
+- Always output an array of objects, even for single items
+
+## Validation Rules
+- Response must be a valid JSON array
+- Each array item must be an object
+- Strict type checking for all fields
+- Required fields:
+  - title: string
+  - price: number | null
+  - currency: string
+
+## Error Handling
+- Provide detailed error messages
+- Include raw content in error responses
+- Validate each object in the array
+- Check for required fields and types
+
+## TypeScript Rules
+- Strict type checking enabled
+- No implicit any types
+- No unused local variables
+- No unused parameters 

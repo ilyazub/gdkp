@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { OpenAI } from 'openai';
+import type { OcrResult } from '@/lib/types';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY || '',
@@ -52,10 +53,18 @@ Analyze this grocery receipt or product price tag image. Extract the product inf
    - Preserve original language for titles
 
 4. Product title correction:
-   - Correct product titles by looking at each word and update ones that are missing logical sense
-   - For example: "Твор." should be corrected to "творог"
-   - Apply common sense corrections while preserving the original language
-   - Only correct obvious abbreviations or incomplete words
+   - Check each word in the product title for logical correctness
+   - Update any abbreviations, typos, or incorrect words to ensure the title makes complete sense
+   - Keep the meaning unchanged
+   - Examples of corrections:
+     * "Твор. 5% 200г" → "Творог 5% 200г"
+     * "Смет. 15% бан." → "Сметана 15% банка"
+     * "Молоко ультр. паст. 1л" → "Молоко ультрапастеризоване 1л"
+     * "Йогурт нат. з клуб." → "Йогурт натуральний з клубнікою"
+     * "Хліб пшен. наріз." → "Хліб пшеничний нарізаний"
+   - Apply similar corrections to any abbreviated or incomplete words
+   - Preserve numbers, percentages, and units (г, л, кг, etc.)
+   - Keep the original language of the product title
 
 Remember: Output ONLY the raw JSON string, nothing else.`;
 
@@ -81,7 +90,7 @@ Remember: Output ONLY the raw JSON string, nothing else.`;
       response_format: {
         type: 'json_object'
       },
-      max_tokens: 512,
+      max_tokens: 2048,
     });
 
     const content = response.choices[0]?.message?.content || '';
@@ -90,17 +99,28 @@ Remember: Output ONLY the raw JSON string, nothing else.`;
 
     try {
       const parsedData = JSON.parse(content);
+      
+      // Handle both single product and array of products
+      const products = Array.isArray(parsedData) ? parsedData : [parsedData];
+      
+      // Validate and normalize each product using OcrResult interface
+      const normalizedProducts: OcrResult[] = products.map(product => ({
+        text: product.title || '',
+        productName: product.title || '',
+        price: typeof product.price === 'number' ? product.price : null,
+        currency: product.currency || 'USD'
+      }));
 
-      return NextResponse.json(parsedData);
-    } catch (error) {
+      return NextResponse.json(normalizedProducts);
+    } catch (jsonError) {
       console.error('Failed to parse JSON response:', content);
       return NextResponse.json({
         error: 'Failed to parse response',
         rawContent: content
       }, { status: 500 });
     }
-  } catch (error) {
-    console.error('Image-to-text API error:', error);
+  } catch (apiError) {
+    console.error('Image-to-text API error:', apiError);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 } 

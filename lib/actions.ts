@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { cookies } from 'next/headers'
-import type { Product } from "@/lib/types"
+import type { Product, OcrResult } from "@/lib/types"
 
 export async function searchProducts(query: string): Promise<Product[]> {
   const cookieStore = cookies()
@@ -66,79 +66,73 @@ export async function processProductImage(formData: FormData) {
         }
       }
       
-      const ocrText = `Product: ${data.title || 'Unknown'}\nPrice: ${data.price || 0}`
-      
       return {
         success: true,
         message: "AI processing successful",
-        ocrText,
         extractedData: data,
       }
     }
 
     if (action === "save") {
-      const ocrText = formData.get("ocrText") as string
-      const productName = formData.get("productName") as string
-      const productPrice = formData.get("productPrice") as string
-      const productCurrency = formData.get("productCurrency") as string
+      const productsJson = formData.get("products") as string
 
-      // Validate required fields
-      if (!productName || !productPrice) {
+      try {
+        const products = JSON.parse(productsJson) as OcrResult[]
+
+        // Validate products
+        if (!Array.isArray(products) || products.length === 0) {
+          return { 
+            success: false, 
+            message: "No valid products to save" 
+          }
+        }
+
+        // Validate each product
+        for (const product of products) {
+          if (!product.productName) {
+            return { 
+              success: false, 
+              message: "Product name is required" 
+            }
+          }
+          if (product.price === undefined || isNaN(product.price)) {
+            return { 
+              success: false, 
+              message: "Invalid price format" 
+            }
+          }
+        }
+
+        const cookieStore = cookies()
+        const supabase = createClient(cookieStore)
+
+        // Insert all products in a batch
+        const { error: insertError } = await supabase.from("products").insert(
+          products.map(product => ({
+            data: {
+              name: product.productName,
+              price: product.price,
+              currency: product.currency || "USD",
+              ocr_text: product.text,
+            }
+          }))
+        )
+
+        if (insertError) {
+          console.error("Error inserting products:", insertError)
+          return { success: false, message: "Failed to save product information" }
+        }
+
+        return {
+          success: true,
+          message: `Successfully saved ${products.length} products`,
+        }
+      } catch (error) {
+        console.error("Error processing products:", error)
         return { 
           success: false, 
-          message: "Product name and price are required" 
+          message: "Failed to process products data" 
         }
-      }
-
-      // Validate price is a valid number
-      const price = parseFloat(productPrice)
-      if (isNaN(price)) {
-        return { 
-          success: false, 
-          message: "Invalid price format" 
-        }
-      }
-
-      const arrayBuffer = await imageFile.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
-
-      const cookieStore = cookies()
-      const supabase = createClient(cookieStore)
-
-      // const { data: storageData, error: storageError } = await supabase.storage
-      //   .from("product-images")
-      //   .upload(`${Date.now()}-${imageFile.name}`, buffer, {
-      //     contentType: imageFile.type,
-      //   })
-
-      // if (storageError) {
-      //   console.error("Error uploading image:", storageError)
-      //   console.error("StorageData:", storageData)
-      //   return { success: false, message: "Failed to upload image" }
-      // }
-
-      // const {
-      //   data: { publicUrl },
-      // } = supabase.storage.from("product-images").getPublicUrl(storageData.path)
-
-      const { error: insertError } = await supabase.from("products").insert({
-        data: {
-          name: productName,
-          price: productPrice,
-          currency: productCurrency || "USD",
-          // image_url: publicUrl,
-          ocr_text: ocrText,
-        }
-      })
-
-      if (insertError) {
-        console.error("Error inserting product:", insertError)
-        return { success: false, message: "Failed to save product information" }
-      }
-
-      return {
-        success: true,
-        message: `Successfully extracted and saved "${productName}" with price ${productPrice} ${productCurrency || "USD"}`,
       }
     }
 
