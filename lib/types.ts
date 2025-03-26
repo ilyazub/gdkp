@@ -1,21 +1,18 @@
-export interface Product {
-  id: string
-  name: string
-  price: number
-  currency?: string
-  location?: string
-  image_url?: string
-  ocr_text?: string
-  created_at: string
-  updated_at: string
-  // Add additional fields for future extensibility
-  [key: string]: string | number | undefined
+export type Product = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  name: string;
+  price: number;
+  currency: string;
+  ocr_text?: string;
+  image_url?: string;
 }
 
-export interface OcrResult {
-  text: string
-  productName?: string
-  price: number | null
-  currency?: string
+export type OcrResult = {
+  productName: string;
+  price: number | null;
+  currency: string;
+  text: string;
 }
 

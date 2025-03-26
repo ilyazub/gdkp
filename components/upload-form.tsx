@@ -307,49 +307,60 @@ export function UploadForm() {
         <div className="p-4 bg-green-50 border border-green-200 rounded-md">
           <div className="font-medium mb-3">AI-Detected Products (You can edit):</div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {extractedProducts.map((product, index) => (
-              <div key={index} className="bg-white rounded-md border border-green-100 p-2.5">
+            {extractedProducts.map((product, index) => {
+              const hasNameError = !product.productName?.trim();
+              const hasPriceError = product.price === null || product.price === undefined || isNaN(Number(product.price));
+              const productKey = `product-${index}-${product.productName}`; // Stable key based on index and name
+              
+              return (
+              <div key={productKey} className="bg-white rounded-md border border-green-100 p-2.5">
                 <div className="grid grid-cols-[auto,1fr] gap-2 items-center">
-                  <Label htmlFor={`productName-${index}`} className="whitespace-nowrap text-xs">Name:</Label>
-                  <Input 
-                    id={`productName-${index}`}
-                    value={product.productName} 
-                    onChange={(e) => {
-                      const newProducts = [...extractedProducts]
-                      newProducts[index] = { ...product, productName: e.target.value, text: e.target.value }
-                      setExtractedProducts(newProducts)
-                    }}
-                    className="h-8 text-sm"
-                  />
+                  <Label htmlFor={`product-name-${productKey}`} className="whitespace-nowrap text-xs">Name:</Label>
+                  <div className="space-y-1">
+                    <Input 
+                      id={`product-name-${productKey}`}
+                      value={product.productName || ''} 
+                      onChange={(e) => {
+                        const newProducts = [...extractedProducts];
+                        newProducts[index] = { ...product, productName: e.target.value, text: e.target.value };
+                        setExtractedProducts(newProducts);
+                      }}
+                      className={`h-8 text-sm ${hasNameError ? 'border-red-500' : ''}`}
+                    />
+                    {hasNameError && <p className="text-xs text-red-500">Name is required</p>}
+                  </div>
                   
-                  <Label htmlFor={`productPrice-${index}`} className="whitespace-nowrap text-xs">Price:</Label>
-                  <div className="flex gap-1">
-                    <Input 
-                      id={`productPrice-${index}`}
-                      type="number" 
-                      step="0.01"
-                      value={product.price || ''} 
-                      onChange={(e) => {
-                        const newProducts = [...extractedProducts]
-                        newProducts[index] = { ...product, price: e.target.value ? parseFloat(e.target.value) : null }
-                        setExtractedProducts(newProducts)
-                      }}
-                      className="h-8 text-sm"
-                    />
-                    <Input 
-                      id={`productCurrency-${index}`}
-                      value={product.currency} 
-                      onChange={(e) => {
-                        const newProducts = [...extractedProducts]
-                        newProducts[index] = { ...product, currency: e.target.value }
-                        setExtractedProducts(newProducts)
-                      }}
-                      className="h-8 text-sm w-16"
-                    />
+                  <Label htmlFor={`product-price-${productKey}`} className="whitespace-nowrap text-xs">Price:</Label>
+                  <div className="space-y-1">
+                    <div className="flex gap-1">
+                      <Input 
+                        id={`product-price-${productKey}`}
+                        type="number" 
+                        step="0.01"
+                        value={product.price ?? ''} 
+                        onChange={(e) => {
+                          const newProducts = [...extractedProducts];
+                          newProducts[index] = { ...product, price: e.target.value ? parseFloat(e.target.value) : null };
+                          setExtractedProducts(newProducts);
+                        }}
+                        className={`h-8 text-sm ${hasPriceError ? 'border-red-500' : ''}`}
+                      />
+                      <Input 
+                        id={`product-currency-${productKey}`}
+                        value={product.currency || ''} 
+                        onChange={(e) => {
+                          const newProducts = [...extractedProducts];
+                          newProducts[index] = { ...product, currency: e.target.value };
+                          setExtractedProducts(newProducts);
+                        }}
+                        className="h-8 text-sm w-16"
+                      />
+                    </div>
+                    {hasPriceError && <p className="text-xs text-red-500">Valid price is required</p>}
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         </div>
       )}
@@ -361,7 +372,16 @@ export function UploadForm() {
         </div>
       )}
 
-      <Button type="submit" disabled={!file || loading || !ocrResult || extractedProducts.length > 0} className="w-full">
+      <Button 
+        type="submit" 
+        disabled={!file || loading || !extractedProducts.length || extractedProducts.some(p => 
+          !p.productName?.trim() || 
+          p.price === null || 
+          p.price === undefined || 
+          isNaN(Number(p.price))
+        )} 
+        className="w-full"
+      >
         {loading ? (
           <>
             <Loader2 className="h-4 w-4 mr-2 animate-spin" />

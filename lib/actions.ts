@@ -37,6 +37,9 @@ export async function processProductImage(formData: FormData) {
       return { success: false, message: "No image provided" }
     }
 
+    const cookieStore = cookies()
+    const supabase = createClient(cookieStore)
+
     if (action === "ocr") {
       const aiFormData = new FormData()
       aiFormData.append("image", imageFile)
@@ -95,7 +98,7 @@ export async function processProductImage(formData: FormData) {
               message: "Product name is required" 
             }
           }
-          if (product.price === undefined || isNaN(product.price)) {
+          if (product.price === null || product.price === undefined || isNaN(Number(product.price))) {
             return { 
               success: false, 
               message: "Invalid price format" 
@@ -103,17 +106,37 @@ export async function processProductImage(formData: FormData) {
           }
         }
 
-        const cookieStore = cookies()
-        const supabase = createClient(cookieStore)
+        // Upload image to Supabase Storage
+        const timestamp = Date.now()
+        const fileExt = imageFile.name.split('.').pop()
+        const filePath = `product-images/${timestamp}.${fileExt}`
 
-        // Insert all products in a batch
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('product-images')
+          .upload(filePath, imageFile, {
+            cacheControl: '3600',
+            upsert: false
+          })
+
+        if (uploadError) {
+          console.error("Error uploading image:", uploadError)
+          return { success: false, message: "Failed to upload product image" }
+        }
+
+        // Get public URL for the uploaded image
+        const { data: { publicUrl } } = supabase.storage
+          .from('product-images')
+          .getPublicUrl(filePath)
+
+        // Insert all products with the image URL
         const { error: insertError } = await supabase.from("products").insert(
           products.map(product => ({
             data: {
               name: product.productName,
               price: product.price,
-              currency: product.currency || "USD",
+              currency: product.currency || "UAH",
               ocr_text: product.text,
+              image_url: publicUrl
             }
           }))
         )
