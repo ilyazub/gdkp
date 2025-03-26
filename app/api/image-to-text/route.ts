@@ -6,7 +6,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY || '',
   baseURL: 'https://openrouter.ai/api/v1',
   defaultHeaders: {
-    'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL,
     "X-Title": "Gde Kupit",
     "X-Description": "Gde Kupit is a website that helps you find the best deals on products in your area."
   },
@@ -69,7 +69,6 @@ Analyze this grocery receipt or product price tag image. Extract the product inf
 Remember: Output ONLY the raw JSON string, nothing else.`;
 
     const response = await openai.chat.completions.create({
-      // model: 'openrouter/auto',
       model: 'google/gemini-2.0-flash-001',
       messages: [
         {
@@ -94,8 +93,6 @@ Remember: Output ONLY the raw JSON string, nothing else.`;
     });
 
     const content = response.choices[0]?.message?.content || '';
-
-    console.dir(content);
 
     try {
       const parsedData = JSON.parse(content);

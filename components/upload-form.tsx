@@ -7,12 +7,10 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card } from "@/components/ui/card"
 import { Upload, Loader2, Camera, Clipboard, ZoomIn } from "lucide-react"
 import { processProductImage } from "@/lib/actions"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { OcrResult } from "@/lib/types"
-import imageCompression from 'browser-image-compression'
+import { compressImage, extractExifData } from "@/lib/utils"
 import { ImageZoomModal } from "@/components/image-zoom-modal"
 
 export function UploadForm() {
@@ -30,30 +28,12 @@ export function UploadForm() {
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
-  const compressImage = async (file: File): Promise<File> => {
-    const options = {
-      maxSizeMB: 2,
-      maxWidthOrHeight: 1920,
-      useWebWorker: true,
-      fileType: file.type,
-      initialQuality: 1, // Lossless compression
-    }
-
-    try {
-      const compressedFile = await imageCompression(file, options)
-      return compressedFile
-    } catch (error) {
-      console.error('Error compressing image:', error)
-      return file
-    }
-  }
-
   const processFile = async (file: File) => {
-    // Check file size (2MB limit)
-    if (file.size > 2 * 1024 * 1024) {
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
       setResult({
         success: false,
-        message: "File size must be less than 2MB",
+        message: "File size must be less than 10MB",
       })
       return
     }
@@ -87,49 +67,6 @@ export function UploadForm() {
     // Compress image before processing
     const compressedFile = await compressImage(file)
     await processImageWithAI(compressedFile)
-  }
-
-  const extractExifData = async (file: File): Promise<{ location?: string }> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const buffer = e.target?.result as ArrayBuffer
-        const view = new DataView(buffer)
-        
-        // Basic EXIF parsing - looking for GPS data
-        let location: string | undefined
-        
-        // Check for GPS data markers
-        for (let i = 0; i < view.byteLength - 2; i++) {
-          if (view.getUint16(i) === 0xE1) { // APP1 marker
-            const exifHeader = String.fromCharCode(
-              view.getUint8(i + 4),
-              view.getUint8(i + 5),
-              view.getUint8(i + 6),
-              view.getUint8(i + 7)
-            )
-            
-            if (exifHeader === "Exif") {
-              // Found EXIF data, try to extract GPS coordinates
-              const gpsOffset = i + 8
-              // Basic GPS data extraction (this is a simplified version)
-              const latRef = String.fromCharCode(view.getUint8(gpsOffset + 18))
-              const lat = view.getFloat32(gpsOffset + 20, true)
-              const lonRef = String.fromCharCode(view.getUint8(gpsOffset + 30))
-              const lon = view.getFloat32(gpsOffset + 32, true)
-              
-              if (!isNaN(lat) && !isNaN(lon)) {
-                location = `${lat.toFixed(6)},${lon.toFixed(6)}`
-                break
-              }
-            }
-          }
-        }
-        
-        resolve({ location })
-      }
-      reader.readAsArrayBuffer(file)
-    })
   }
 
   // Setup clipboard paste event listener
@@ -217,66 +154,63 @@ export function UploadForm() {
     }
   }
 
-  const processImageWithAI = async (imageFile: File) => {
-    setLoading(true)
+  const processImageWithAI = async (file: File) => {
     try {
-      const formData = new FormData()
-      formData.append("image", imageFile)
-      formData.append("action", "ocr")
+      const formData = new FormData();
+      formData.append('image', file);
 
-      const response = await processProductImage(formData)
+      const response = await fetch('/api/image-to-text', {
+        method: 'POST',
+        body: formData,
+      });
 
-      if (response.success && response.extractedData) {
-        setOcrResult(response.extractedData)
-        
-        if (response.extractedData) {
-          setExtractedProducts(response.extractedData)
-          console.log("AI Extracted Data:", response.extractedData)
-        }
-      } else {
-        setOcrResult("Image processing failed. Please try a clearer image.")
-        setResult({
-          success: false,
-          message: response.message || "Image processing failed",
-        })
+      if (!response.ok) {
+        throw new Error('Failed to process image');
       }
-    } catch (processError) {
-      console.error("Image Processing Error:", processError)
-      setOcrResult("Image processing failed. Please try a clearer image.")
+
+      const data = await response.json();
+      
+      // Handle both array and single product responses
+      const products = Array.isArray(data) ? data : [data];
+      
+      // Validate and normalize each product
+      const normalizedProducts: OcrResult[] = products.map(product => ({
+        text: product.productName || '',
+        productName: product.productName || '',
+        price: typeof product.price === 'number' ? product.price : null,
+        currency: product.currency || 'USD'
+      }));
+
+      setOcrResult(normalizedProducts[0]?.text || '');
+      setExtractedProducts(normalizedProducts);
+    } catch (error) {
+      console.error('Error processing image:', error);
       setResult({
         success: false,
-        message: "An error occurred during image processing",
-      })
-    } finally {
-      setLoading(false)
+        message: 'Failed to process image. Please try again.',
+      });
     }
-  }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!file || !ocrResult) {
-      setResult({
-        success: false,
-        message: "Please upload an image first",
-      })
-      return
-    }
+    if (!file || extractedProducts.length === 0) return
 
     setLoading(true)
-    setResult(null)
-
     try {
       const formData = new FormData()
       formData.append("image", file)
-      formData.append("ocrText", ocrResult)
+      formData.append("action", "save")
       formData.append("products", JSON.stringify(extractedProducts))
       formData.append("location", JSON.stringify(location))
-      formData.append("action", "save")
 
-      const result = await processProductImage(formData)
-      setResult(result)
+      const response = await processProductImage(formData)
+      setResult({
+        success: response.success,
+        message: response.success ? (response.data?.message ?? "Success") : (response.error?.message ?? "An error occurred")
+      })
 
-      if (result.success) {
+      if (response.success) {
         setFile(null)
         setPreview(null)
         setOcrResult(null)
@@ -298,12 +232,6 @@ export function UploadForm() {
     }
   }
 
-  const handleCameraCapture = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click()
-    }
-  }
-
   const handlePasteClick = () => {
     if (formRef.current) {
       formRef.current.focus()
@@ -319,36 +247,58 @@ export function UploadForm() {
     <form ref={formRef} onSubmit={handleSubmit} className="space-y-4" tabIndex={0}>
       <div 
         ref={dropZoneRef}
-        className={`border-2 border-dashed rounded-md p-6 text-center ${
+        className={`border-2 border-dashed rounded-md p-4 text-center relative ${
           isDragging ? 'border-primary bg-primary/5' : 'border-gray-300'
         }`}
       >
-        <Upload className="h-10 w-10 mx-auto mb-2 text-gray-400" />
-        <p className="text-sm font-medium mb-1">Drag & drop an image here</p>
-        <p className="text-xs text-gray-500 mb-4">or use the options below</p>
-        
-        <div className="grid gap-2">
-          <Label htmlFor="product-image" className="sr-only">Product Image</Label>
+        <div className="flex items-center justify-center gap-3">
+          <Input
+            id="product-image"
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            disabled={loading}
+            className="w-[0.1px] h-[0.1px] opacity-0 overflow-hidden absolute"
+            ref={fileInputRef}
+            capture={undefined}
+          />
+          <label 
+            htmlFor="product-image" 
+            className="cursor-pointer flex items-center gap-2 text-sm font-medium hover:text-primary"
+          >
+            <Upload className="h-5 w-5" />
+            Choose file or drag & drop
+          </label>
           <div className="flex gap-2">
-            <Input
-              id="product-image"
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              disabled={loading}
-              className="flex-1"
-              ref={fileInputRef}
-              capture="environment"
-            />
-            <Button type="button" variant="outline" onClick={handleCameraCapture} disabled={loading} title="Take photo">
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                if (fileInputRef.current) {
+                  fileInputRef.current.removeAttribute('capture');
+                  fileInputRef.current.setAttribute('capture', 'environment');
+                  fileInputRef.current.click();
+                  // Reset capture after click to allow normal file selection next time
+                  setTimeout(() => {
+                    if (fileInputRef.current) {
+                      fileInputRef.current.removeAttribute('capture');
+                    }
+                  }, 100);
+                }
+              }} 
+              disabled={loading} 
+              title="Take photo with camera"
+            >
               <Camera className="h-4 w-4" />
             </Button>
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={handlePasteClick}
               disabled={loading}
-              title="Paste from clipboard"
+              title="Paste from clipboard (Ctrl+V / Cmd+V)"
             >
               <Clipboard className="h-4 w-4" />
             </Button>
@@ -356,16 +306,22 @@ export function UploadForm() {
         </div>
       </div>
 
-      <Alert>
-        <AlertDescription>You can paste an image directly from clipboard using Ctrl+V / Cmd+V</AlertDescription>
-      </Alert>
+      {result && !preview && (
+        <div
+          className={`p-2 text-sm rounded-md ${
+            result.success ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+          }`}
+        >
+          {result.message}
+        </div>
+      )}
 
       {preview && (
         <div className="relative">
           <img
             src={preview}
             alt="Preview"
-            className="w-full h-auto rounded-md"
+            className="w-full h-auto rounded-md cursor-zoom-in"
             onClick={() => setIsZoomModalOpen(true)}
           />
           <Button
@@ -377,6 +333,11 @@ export function UploadForm() {
           >
             <ZoomIn className="h-4 w-4" />
           </Button>
+          <ImageZoomModal
+            isOpen={isZoomModalOpen}
+            onClose={() => setIsZoomModalOpen(false)}
+            imageUrl={preview}
+          />
         </div>
       )}
 
@@ -495,16 +456,6 @@ export function UploadForm() {
           "Submit"
         )}
       </Button>
-
-      {result && (
-        <div
-          className={`p-3 rounded-md ${
-            result.success ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-          }`}
-        >
-          {result.message}
-        </div>
-      )}
     </form>
   )
 }
