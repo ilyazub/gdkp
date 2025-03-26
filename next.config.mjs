@@ -48,21 +48,11 @@ mergeConfig(nextConfig, userConfig)
 
 function mergeConfig(nextConfig, userConfig) {
   if (!userConfig) {
-    return
+    return nextConfig
   }
-
-  for (const key in userConfig) {
-    if (
-      typeof nextConfig[key] === 'object' &&
-      !Array.isArray(nextConfig[key])
-    ) {
-      nextConfig[key] = {
-        ...nextConfig[key],
-        ...userConfig[key],
-      }
-    } else {
-      nextConfig[key] = userConfig[key]
-    }
+  return {
+    ...nextConfig,
+    ...userConfig.default,
   }
 }
 
@@ -70,7 +60,47 @@ const withPWAConfig = withPWA({
   dest: 'public',
   register: true,
   skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development'
+  disable: process.env.NODE_ENV === 'development',
+  runtimeCaching: [
+    {
+      urlPattern: /^https:\/\/.*\.supabase\.co\/.*$/i,
+      handler: 'NetworkFirst',
+      options: {
+        cacheName: 'supabase-cache',
+        expiration: {
+          maxEntries: 100,
+          maxAgeSeconds: 24 * 60 * 60 // 24 hours
+        },
+        networkTimeoutSeconds: 10,
+        cacheableResponse: {
+          statuses: [0, 200]
+        }
+      }
+    },
+    {
+      urlPattern: /^https:\/\/.*\.openrouter\.ai\/.*$/i,
+      handler: 'NetworkFirst',
+      options: {
+        cacheName: 'openrouter-cache',
+        expiration: {
+          maxEntries: 50,
+          maxAgeSeconds: 12 * 60 * 60 // 12 hours
+        },
+        networkTimeoutSeconds: 10,
+        cacheableResponse: {
+          statuses: [0, 200]
+        }
+      }
+    }
+  ],
+  buildExcludes: [/app-build-manifest.json$/],
+  fallbacks: {
+    document: '/~offline',
+    image: '/static/images/fallback.png',
+    font: '/static/fonts/fallback.woff2',
+    audio: false,
+    video: false
+  }
 })
 
 export default withPWAConfig(nextConfig)

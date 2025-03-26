@@ -163,25 +163,25 @@ export async function getRecentProducts(): Promise<ApiResponse<Product[]>> {
 
 export async function processProductImage(formData: FormData): Promise<ApiResponse<OcrResponse | SaveResponse>> {
   try {
-    const imageFile = formData.get("image") as File
     const action = formData.get("action") as string
     const locationJson = formData.get("location") as string
     const imageUrl = formData.get("imageUrl") as string
-
-    if (!imageFile) {
-      return {
-        success: false,
-        error: {
-          code: ErrorCodes.INVALID_INPUT,
-          message: "No image provided"
-        }
-      }
-    }
 
     const cookieStore = cookies()
     const supabase = createClient(cookieStore)
 
     if (action === "ocr") {
+      const imageFile = formData.get("image") as File
+      if (!imageFile) {
+        return {
+          success: false,
+          error: {
+            code: ErrorCodes.INVALID_INPUT,
+            message: "No image provided"
+          }
+        }
+      }
+
       const aiFormData = new FormData()
       aiFormData.append("image", imageFile)
       
@@ -228,6 +228,16 @@ export async function processProductImage(formData: FormData): Promise<ApiRespon
     }
 
     if (action === "save") {
+      if (!imageUrl) {
+        return {
+          success: false,
+          error: {
+            code: ErrorCodes.INVALID_INPUT,
+            message: "Image URL is required"
+          }
+        }
+      }
+
       const productsJson = formData.get("products") as string
 
       try {

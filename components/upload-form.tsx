@@ -216,7 +216,6 @@ export function UploadForm() {
     setLoading(true)
     try {
       const formData = new FormData()
-      formData.append("image", file)
       formData.append("action", "save")
       formData.append("products", JSON.stringify(extractedProducts))
       formData.append("location", JSON.stringify(location))
