@@ -1,3 +1,8 @@
+export type Location = {
+  name: string;
+  address: string;
+}
+
 export type Product = {
   id: string;
   created_at: string;
@@ -7,6 +12,7 @@ export type Product = {
   currency: string;
   ocr_text?: string;
   image_url?: string;
+  location?: Location;
 }
 
 export type OcrResult = {

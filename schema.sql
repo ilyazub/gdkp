@@ -15,6 +15,9 @@ CREATE INDEX IF NOT EXISTS products_price_idx ON products USING GIN ((data->'pri
 -- Create index for full text search
 CREATE INDEX IF NOT EXISTS products_full_text_idx ON products USING GIN (to_tsvector('english', data->>'name'));
 
+-- Create index for location search
+CREATE INDEX IF NOT EXISTS products_location_idx ON products USING GIN ((data->'location'));
+
 ALTER TABLE storage.buckets DISABLE ROW LEVEL SECURITY;
 ALTER TABLE storage.objects DISABLE ROW LEVEL SECURITY;
 

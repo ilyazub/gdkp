@@ -1,3 +1,5 @@
+import withPWA from 'next-pwa'
+
 let userConfig = undefined
 try {
   userConfig = await import('./v0-user-next.config')
@@ -51,4 +53,11 @@ function mergeConfig(nextConfig, userConfig) {
   }
 }
 
-export default nextConfig
+const withPWAConfig = withPWA({
+  dest: 'public',
+  register: true,
+  skipWaiting: true,
+  disable: process.env.NODE_ENV === 'development'
+})
+
+export default withPWAConfig(nextConfig)

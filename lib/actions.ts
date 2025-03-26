@@ -3,59 +3,29 @@
 import { createClient } from "@/lib/supabase/server"
 import { cookies } from 'next/headers'
 import type { Product, OcrResult } from "@/lib/types"
+import sharp from 'sharp'
 
 async function compressImage(file: File): Promise<File> {
-  const options = {
-    maxSizeMB: 1,
-    maxWidthOrHeight: 1920,
-    useWebWorker: true,
-    fileType: 'image/jpeg',
-    initialQuality: 0.8,
-  }
-
   try {
-    // Create an image element
-    const img = new Image()
-    img.src = URL.createObjectURL(file)
-    await new Promise((resolve) => (img.onload = resolve))
+    // Convert File to Buffer
+    const buffer = Buffer.from(await file.arrayBuffer())
 
-    // Create a canvas
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('Could not get canvas context')
+    // Process image with Sharp
+    const processedBuffer = await sharp(buffer)
+      .resize(1920, 1920, {
+        fit: 'inside',
+        withoutEnlargement: true
+      })
+      .jpeg({
+        quality: 80,
+        progressive: true
+      })
+      .toBuffer()
 
-    // Calculate new dimensions
-    let { width, height } = img
-    const maxSize = options.maxWidthOrHeight
-    if (width > height && width > maxSize) {
-      height = Math.round((height * maxSize) / width)
-      width = maxSize
-    } else if (height > maxSize) {
-      width = Math.round((width * maxSize) / height)
-      height = maxSize
-    }
-
-    // Set canvas dimensions
-    canvas.width = width
-    canvas.height = height
-
-    // Draw and compress
-    ctx.drawImage(img, 0, 0, width, height)
-    const compressedBlob = await new Promise<Blob>((resolve) => {
-      canvas.toBlob(
-        (blob) => resolve(blob || new Blob()), 
-        'image/jpeg',
-        options.initialQuality
-      )
-    })
-
-    // Clean up
-    URL.revokeObjectURL(img.src)
-
-    // Convert to File
-    return new File([compressedBlob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+    // Convert back to File
+    return new File([processedBuffer], file.name.replace(/\.[^/.]+$/, '.jpg'), {
       type: 'image/jpeg',
-      lastModified: Date.now(),
+      lastModified: Date.now()
     })
   } catch (error) {
     console.error('Error compressing image:', error)
@@ -91,6 +61,7 @@ export async function processProductImage(formData: FormData) {
   try {
     const imageFile = formData.get("image") as File
     const action = formData.get("action") as string
+    const locationJson = formData.get("location") as string
 
     if (!imageFile) {
       return { success: false, message: "No image provided" }
@@ -140,6 +111,20 @@ export async function processProductImage(formData: FormData) {
 
       try {
         const products = JSON.parse(productsJson) as OcrResult[]
+        let location: { name: string; address: string } | null = null
+
+        try {
+          if (locationJson) {
+            location = JSON.parse(locationJson)
+            // Validate location object
+            if (!location.name && !location.address) {
+              location = null
+            }
+          }
+        } catch (error) {
+          console.error("Error parsing location:", error)
+          location = null
+        }
 
         // Validate products
         if (!Array.isArray(products) || products.length === 0) {
@@ -194,7 +179,8 @@ export async function processProductImage(formData: FormData) {
               price: product.price,
               currency: product.currency || "UAH",
               ocr_text: product.text,
-              image_url: publicUrl
+              image_url: publicUrl,
+              location: location
             }
           }))
         )

@@ -21,6 +21,7 @@ export function UploadForm() {
   const [loading, setLoading] = useState(false)
   const [ocrResult, setOcrResult] = useState<string | null>(null)
   const [extractedProducts, setExtractedProducts] = useState<OcrResult[]>([])
+  const [location, setLocation] = useState<{ name: string; address: string }>({ name: "", address: "" })
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isZoomModalOpen, setIsZoomModalOpen] = useState(false)
@@ -61,6 +62,21 @@ export function UploadForm() {
     setResult(null)
     setOcrResult(null)
     setExtractedProducts([])
+    setLocation({ name: "", address: "" })
+
+    // Try to extract location from image metadata
+    try {
+      const exifData = await extractExifData(file)
+      if (exifData?.location) {
+        // If we have coordinates, we can try to get a place name
+        setLocation({ 
+          name: "Unknown Location", 
+          address: exifData.location 
+        })
+      }
+    } catch (error) {
+      console.error("Error extracting EXIF data:", error)
+    }
 
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -71,6 +87,49 @@ export function UploadForm() {
     // Compress image before processing
     const compressedFile = await compressImage(file)
     await processImageWithAI(compressedFile)
+  }
+
+  const extractExifData = async (file: File): Promise<{ location?: string }> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const buffer = e.target?.result as ArrayBuffer
+        const view = new DataView(buffer)
+        
+        // Basic EXIF parsing - looking for GPS data
+        let location: string | undefined
+        
+        // Check for GPS data markers
+        for (let i = 0; i < view.byteLength - 2; i++) {
+          if (view.getUint16(i) === 0xE1) { // APP1 marker
+            const exifHeader = String.fromCharCode(
+              view.getUint8(i + 4),
+              view.getUint8(i + 5),
+              view.getUint8(i + 6),
+              view.getUint8(i + 7)
+            )
+            
+            if (exifHeader === "Exif") {
+              // Found EXIF data, try to extract GPS coordinates
+              const gpsOffset = i + 8
+              // Basic GPS data extraction (this is a simplified version)
+              const latRef = String.fromCharCode(view.getUint8(gpsOffset + 18))
+              const lat = view.getFloat32(gpsOffset + 20, true)
+              const lonRef = String.fromCharCode(view.getUint8(gpsOffset + 30))
+              const lon = view.getFloat32(gpsOffset + 32, true)
+              
+              if (!isNaN(lat) && !isNaN(lon)) {
+                location = `${lat.toFixed(6)},${lon.toFixed(6)}`
+                break
+              }
+            }
+          }
+        }
+        
+        resolve({ location })
+      }
+      reader.readAsArrayBuffer(file)
+    })
   }
 
   // Setup clipboard paste event listener
@@ -211,6 +270,7 @@ export function UploadForm() {
       formData.append("image", file)
       formData.append("ocrText", ocrResult)
       formData.append("products", JSON.stringify(extractedProducts))
+      formData.append("location", JSON.stringify(location))
       formData.append("action", "save")
 
       const result = await processProductImage(formData)
@@ -221,6 +281,7 @@ export function UploadForm() {
         setPreview(null)
         setOcrResult(null)
         setExtractedProducts([])
+        setLocation({ name: "", address: "" })
         if (fileInputRef.current) {
           fileInputRef.current.value = ""
         }
@@ -300,26 +361,23 @@ export function UploadForm() {
       </Alert>
 
       {preview && (
-        <>
-          <Card 
-            className="overflow-hidden cursor-zoom-in relative group"
+        <div className="relative">
+          <img
+            src={preview}
+            alt="Preview"
+            className="w-full h-auto rounded-md"
+            onClick={() => setIsZoomModalOpen(true)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="absolute top-2 right-2"
             onClick={() => setIsZoomModalOpen(true)}
           >
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-              <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-            <img 
-              src={preview || "/placeholder.svg"} 
-              alt="Preview" 
-              className="w-full h-auto max-h-64 object-contain"
-            />
-          </Card>
-          <ImageZoomModal
-            isOpen={isZoomModalOpen}
-            onClose={() => setIsZoomModalOpen(false)}
-            imageUrl={preview}
-          />
-        </>
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+        </div>
       )}
 
       {extractedProducts.length > 0 && (
@@ -329,57 +387,84 @@ export function UploadForm() {
             {extractedProducts.map((product, index) => {
               const hasNameError = !product.productName?.trim();
               const hasPriceError = product.price === null || product.price === undefined || isNaN(Number(product.price));
-              const productKey = `product-${index}-${product.productName}`; // Stable key based on index and name
+              const productKey = `product-${index}-${product.productName}`;
               
               return (
-              <div key={productKey} className="bg-white rounded-md border border-green-100 p-2.5">
-                <div className="grid grid-cols-[auto,1fr] gap-2 items-center">
-                  <Label htmlFor={`product-name-${productKey}`} className="whitespace-nowrap text-xs">Name:</Label>
-                  <div className="space-y-1">
-                    <Input 
-                      id={`product-name-${productKey}`}
-                      value={product.productName || ''} 
-                      onChange={(e) => {
-                        const newProducts = [...extractedProducts];
-                        newProducts[index] = { ...product, productName: e.target.value, text: e.target.value };
-                        setExtractedProducts(newProducts);
-                      }}
-                      className={`h-8 text-sm ${hasNameError ? 'border-red-500' : ''}`}
-                    />
-                    {hasNameError && <p className="text-xs text-red-500">Name is required</p>}
-                  </div>
-                  
-                  <Label htmlFor={`product-price-${productKey}`} className="whitespace-nowrap text-xs">Price:</Label>
-                  <div className="space-y-1">
-                    <div className="flex gap-1">
+                <div key={productKey} className="bg-white rounded-md border border-green-100 p-2.5">
+                  <div className="grid grid-cols-[auto,1fr] gap-2 items-center">
+                    <Label htmlFor={`product-name-${productKey}`} className="whitespace-nowrap text-xs">Name:</Label>
+                    <div className="space-y-1">
                       <Input 
-                        id={`product-price-${productKey}`}
-                        type="number" 
-                        step="0.01"
-                        value={product.price ?? ''} 
+                        id={`product-name-${productKey}`}
+                        value={product.productName || ''} 
                         onChange={(e) => {
                           const newProducts = [...extractedProducts];
-                          newProducts[index] = { ...product, price: e.target.value ? parseFloat(e.target.value) : null };
+                          newProducts[index] = { ...product, productName: e.target.value, text: e.target.value };
                           setExtractedProducts(newProducts);
                         }}
-                        className={`h-8 text-sm ${hasPriceError ? 'border-red-500' : ''}`}
+                        className={`h-8 text-sm ${hasNameError ? 'border-red-500' : ''}`}
                       />
-                      <Input 
-                        id={`product-currency-${productKey}`}
-                        value={product.currency || ''} 
-                        onChange={(e) => {
-                          const newProducts = [...extractedProducts];
-                          newProducts[index] = { ...product, currency: e.target.value };
-                          setExtractedProducts(newProducts);
-                        }}
-                        className="h-8 text-sm w-16"
-                      />
+                      {hasNameError && <p className="text-xs text-red-500">Name is required</p>}
                     </div>
-                    {hasPriceError && <p className="text-xs text-red-500">Valid price is required</p>}
+                    
+                    <Label htmlFor={`product-price-${productKey}`} className="whitespace-nowrap text-xs">Price:</Label>
+                    <div className="space-y-1">
+                      <div className="flex gap-1">
+                        <Input 
+                          id={`product-price-${productKey}`}
+                          type="number" 
+                          step="0.01"
+                          value={product.price ?? ''} 
+                          onChange={(e) => {
+                            const newProducts = [...extractedProducts];
+                            newProducts[index] = { ...product, price: e.target.value ? parseFloat(e.target.value) : null };
+                            setExtractedProducts(newProducts);
+                          }}
+                          className={`h-8 text-sm ${hasPriceError ? 'border-red-500' : ''}`}
+                        />
+                        <Input 
+                          id={`product-currency-${productKey}`}
+                          value={product.currency || ''} 
+                          onChange={(e) => {
+                            const newProducts = [...extractedProducts];
+                            newProducts[index] = { ...product, currency: e.target.value };
+                            setExtractedProducts(newProducts);
+                          }}
+                          className="h-8 text-sm w-16"
+                        />
+                      </div>
+                      {hasPriceError && <p className="text-xs text-red-500">Valid price is required</p>}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )})}
+              )
+            })}
+          </div>
+
+          <div className="mt-4 space-y-4">
+            <div>
+              <Label htmlFor="location-name" className="text-sm font-medium">Store Name (optional):</Label>
+              <Input
+                id="location-name"
+                value={location.name}
+                onChange={(e) => setLocation(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Enter store name"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="location-address" className="text-sm font-medium">Address (optional):</Label>
+              <Input
+                id="location-address"
+                value={location.address}
+                onChange={(e) => setLocation(prev => ({ ...prev, address: e.target.value }))}
+                placeholder="Enter store address or coordinates"
+                className="mt-1"
+              />
+            </div>
+            <p className="text-xs text-gray-500">
+              Location information will be applied to all products in this image. You can enter a store name and address, or just coordinates.
+            </p>
           </div>
         </div>
       )}
