@@ -17,20 +17,20 @@ export default async function Home({
   const products = query ? await searchProducts(query) : await getRecentProducts();
 
   return (
-    <main className="container mx-auto p-4 space-y-8">
+    <main className="container mx-auto px-4 py-8 space-y-8">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold">GDKP - Grocery Price Tracker</h1>
         <p className="text-muted-foreground">Track and compare grocery prices across different stores</p>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[2fr,1fr]">
-        <div className="space-y-6">
+      <div className="grid gap-8 lg:grid-cols-[3fr,2fr] items-start">
+        <div className="space-y-8">
           <div className="space-y-4">
             <h2 className="text-xl font-semibold">Search Products</h2>
             <SearchForm initialQuery={query} />
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium">
                 {query ? `Results for "${query}"` : "Recent Products"}
@@ -48,7 +48,7 @@ export default async function Home({
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="lg:sticky lg:top-8 space-y-4 bg-card p-6 rounded-lg border shadow-sm">
           <h2 className="text-xl font-semibold">Upload Product Photo</h2>
           <UploadForm />
         </div>

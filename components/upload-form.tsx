@@ -29,8 +29,8 @@ export function UploadForm() {
   const router = useRouter()
 
   const processFile = async (file: File) => {
-    // Check file size (10MB limit)
-    if (file.size > 10 * 1024 * 1024) {
+    // Check file size (20MB limit)
+    if (file.size > 20 * 1024 * 1024) {
       setResult({
         success: false,
         message: "File size must be less than 10MB",
@@ -342,19 +342,24 @@ export function UploadForm() {
       )}
 
       {extractedProducts.length > 0 && (
-        <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-          <div className="font-medium mb-3">AI-Detected Products (You can edit):</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {extractedProducts.map((product, index) => {
-              const hasNameError = !product.productName?.trim();
-              const hasPriceError = product.price === null || product.price === undefined || isNaN(Number(product.price));
-              const productKey = `product-${index}-${product.productName}`;
-              
-              return (
-                <div key={productKey} className="bg-white rounded-md border border-green-100 p-2.5">
-                  <div className="grid grid-cols-[auto,1fr] gap-2 items-center">
-                    <Label htmlFor={`product-name-${productKey}`} className="whitespace-nowrap text-xs">Name:</Label>
-                    <div className="space-y-1">
+        <div className="p-6 bg-green-50 border border-green-200 rounded-md">
+          <div className="font-medium mb-4">AI-Detected Products (You can edit):</div>
+          
+          <div className="rounded-md border bg-white">
+            <div className="grid grid-cols-[1fr,auto] gap-4 p-3 border-b bg-muted/50 font-medium text-sm">
+              <div>Product Name</div>
+              <div className="w-[200px]">Price</div>
+            </div>
+            
+            <div className="divide-y">
+              {extractedProducts.map((product, index) => {
+                const hasNameError = !product.productName?.trim();
+                const hasPriceError = product.price === null || product.price === undefined || isNaN(Number(product.price));
+                const productKey = `product-${index}-${product.productName}`;
+                
+                return (
+                  <div key={productKey} className="grid grid-cols-[1fr,auto] gap-4 p-3 items-start">
+                    <div>
                       <Input 
                         id={`product-name-${productKey}`}
                         value={product.productName || ''} 
@@ -363,67 +368,64 @@ export function UploadForm() {
                           newProducts[index] = { ...product, productName: e.target.value, text: e.target.value };
                           setExtractedProducts(newProducts);
                         }}
-                        className={`h-8 text-sm ${hasNameError ? 'border-red-500' : ''}`}
+                        className={hasNameError ? 'border-red-500' : ''}
+                        placeholder="Product name"
                       />
-                      {hasNameError && <p className="text-xs text-red-500">Name is required</p>}
+                      {hasNameError && <p className="text-xs text-red-500 mt-1">Name is required</p>}
                     </div>
                     
-                    <Label htmlFor={`product-price-${productKey}`} className="whitespace-nowrap text-xs">Price:</Label>
-                    <div className="space-y-1">
-                      <div className="flex gap-1">
-                        <Input 
-                          id={`product-price-${productKey}`}
-                          type="number" 
-                          step="0.01"
-                          value={product.price ?? ''} 
-                          onChange={(e) => {
-                            const newProducts = [...extractedProducts];
-                            newProducts[index] = { ...product, price: e.target.value ? parseFloat(e.target.value) : null };
-                            setExtractedProducts(newProducts);
-                          }}
-                          className={`h-8 text-sm ${hasPriceError ? 'border-red-500' : ''}`}
-                        />
-                        <Input 
-                          id={`product-currency-${productKey}`}
-                          value={product.currency || ''} 
-                          onChange={(e) => {
-                            const newProducts = [...extractedProducts];
-                            newProducts[index] = { ...product, currency: e.target.value };
-                            setExtractedProducts(newProducts);
-                          }}
-                          className="h-8 text-sm w-16"
-                        />
-                      </div>
-                      {hasPriceError && <p className="text-xs text-red-500">Valid price is required</p>}
+                    <div className="flex gap-2 w-[200px]">
+                      <Input 
+                        id={`product-price-${productKey}`}
+                        type="number" 
+                        step="0.01"
+                        value={product.price ?? ''} 
+                        onChange={(e) => {
+                          const newProducts = [...extractedProducts];
+                          newProducts[index] = { ...product, price: e.target.value ? parseFloat(e.target.value) : null };
+                          setExtractedProducts(newProducts);
+                        }}
+                        className={hasPriceError ? 'border-red-500' : ''}
+                        placeholder="0.00"
+                      />
+                      <Input 
+                        id={`product-currency-${productKey}`}
+                        value={product.currency || ''} 
+                        onChange={(e) => {
+                          const newProducts = [...extractedProducts];
+                          newProducts[index] = { ...product, currency: e.target.value };
+                          setExtractedProducts(newProducts);
+                        }}
+                        className="w-20"
+                        placeholder="USD"
+                      />
                     </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
 
-          <div className="mt-4 space-y-4">
-            <div>
+          <div className="mt-6 space-y-4">
+            <div className="space-y-2">
               <Label htmlFor="location-name" className="text-sm font-medium">Store Name (optional):</Label>
               <Input
                 id="location-name"
                 value={location.name}
                 onChange={(e) => setLocation(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="Enter store name"
-                className="mt-1"
               />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="location-address" className="text-sm font-medium">Address (optional):</Label>
               <Input
                 id="location-address"
                 value={location.address}
                 onChange={(e) => setLocation(prev => ({ ...prev, address: e.target.value }))}
                 placeholder="Enter store address or coordinates"
-                className="mt-1"
               />
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               Location information will be applied to all products in this image. You can enter a store name and address, or just coordinates.
             </p>
           </div>
