@@ -1,0 +1,23 @@
+{
+  "functions": {
+    "app/api/image-to-text/route.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/image-to-text",
+      "dest": "/api/image-to-text",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+      }
+    }
+  ],
+  "regions": ["iad1"],
+  "github": {
+    "silent": true
+  }
+} 

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Upload, Loader2, Camera, Clipboard, ZoomIn } from "lucide-react"
+import { Upload, Loader2, Camera, Clipboard, ZoomIn, Trash2 } from "lucide-react"
 import { processProductImage } from "@/lib/actions"
 import type { OcrResult } from "@/lib/types"
 import { compressImage, extractExifData } from "@/lib/utils"
@@ -29,11 +29,11 @@ export function UploadForm() {
   const router = useRouter()
 
   const processFile = async (file: File) => {
-    // Check file size (20MB limit)
-    if (file.size > 20 * 1024 * 1024) {
+    // Check file size (4MB limit)
+    if (file.size > 4 * 1024 * 1024) {
       setResult({
         success: false,
-        message: "File size must be less than 10MB",
+        message: "File size must be less than 4MB",
       })
       return
     }
@@ -343,12 +343,28 @@ export function UploadForm() {
 
       {extractedProducts.length > 0 && (
         <div className="p-6 bg-green-50 border border-green-200 rounded-md">
-          <div className="font-medium mb-4">AI-Detected Products (You can edit):</div>
+          <div className="flex justify-between items-center mb-4">
+            <div className="font-medium">AI-Detected Products (You can edit):</div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setExtractedProducts([
+                  ...extractedProducts,
+                  { productName: '', text: '', price: null, currency: 'USD' }
+                ])
+              }}
+            >
+              Add Product
+            </Button>
+          </div>
           
           <div className="rounded-md border bg-white">
-            <div className="grid grid-cols-[1fr,auto] gap-4 p-3 border-b bg-muted/50 font-medium text-sm">
+            <div className="grid grid-cols-[1fr,auto,auto] gap-4 p-3 border-b bg-muted/50 font-medium text-sm">
               <div>Product Name</div>
               <div className="w-[200px]">Price</div>
+              <div className="w-[40px]"></div>
             </div>
             
             <div className="divide-y">
@@ -358,7 +374,7 @@ export function UploadForm() {
                 const productKey = `product-${index}-${product.productName}`;
                 
                 return (
-                  <div key={productKey} className="grid grid-cols-[1fr,auto] gap-4 p-3 items-start">
+                  <div key={productKey} className="grid grid-cols-[1fr,auto,auto] gap-4 p-3 items-start">
                     <div>
                       <Input 
                         id={`product-name-${productKey}`}
@@ -400,11 +416,33 @@ export function UploadForm() {
                         placeholder="USD"
                       />
                     </div>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10 text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        const newProducts = [...extractedProducts];
+                        newProducts.splice(index, 1);
+                        setExtractedProducts(newProducts);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Remove product</span>
+                    </Button>
                   </div>
                 )
               })}
             </div>
           </div>
+
+          {/* Show a message when there are no products */}
+          {extractedProducts.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No products yet. Click "Add Product" to add one manually.</p>
+            </div>
+          )}
 
           <div className="mt-6 space-y-4">
             <div className="space-y-2">

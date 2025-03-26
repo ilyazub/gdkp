@@ -39,13 +39,14 @@ async function compressImage(file: File): Promise<File> {
     const buffer = Buffer.from(await file.arrayBuffer())
 
     const processedBuffer = await sharp(buffer)
-      .resize(1920, 1920, {
+      .resize(1600, 1600, {
         fit: 'inside',
         withoutEnlargement: true
       })
       .jpeg({
-        quality: 80,
-        progressive: true
+        quality: 75,
+        progressive: true,
+        mozjpeg: true
       })
       .toBuffer()
 

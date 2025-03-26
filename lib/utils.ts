@@ -39,11 +39,11 @@ export function formatDate(dateString: string): string {
 
 export async function compressImage(file: File): Promise<File> {
   const options = {
-    maxSizeMB: 2,
-    maxWidthOrHeight: 1920,
+    maxSizeMB: 1,
+    maxWidthOrHeight: 1600,
     useWebWorker: true,
-    fileType: file.type,
-    initialQuality: 1, // Lossless compression
+    fileType: 'image/jpeg',
+    initialQuality: 0.8,
   }
 
   try {
