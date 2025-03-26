@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
-import { Upload, Loader2, Camera, Clipboard } from "lucide-react"
+import { Upload, Loader2, Camera, Clipboard, ZoomIn } from "lucide-react"
 import { processProductImage } from "@/lib/actions"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { OcrResult } from "@/lib/types"
 import imageCompression from 'browser-image-compression'
+import { ImageZoomModal } from "@/components/image-zoom-modal"
 
 export function UploadForm() {
   const [file, setFile] = useState<File | null>(null)
@@ -22,6 +23,7 @@ export function UploadForm() {
   const [extractedProducts, setExtractedProducts] = useState<OcrResult[]>([])
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [isZoomModalOpen, setIsZoomModalOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
@@ -298,9 +300,26 @@ export function UploadForm() {
       </Alert>
 
       {preview && (
-        <Card className="overflow-hidden">
-          <img src={preview || "/placeholder.svg"} alt="Preview" className="w-full h-auto max-h-64 object-contain" />
-        </Card>
+        <>
+          <Card 
+            className="overflow-hidden cursor-zoom-in relative group"
+            onClick={() => setIsZoomModalOpen(true)}
+          >
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+              <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+            <img 
+              src={preview || "/placeholder.svg"} 
+              alt="Preview" 
+              className="w-full h-auto max-h-64 object-contain"
+            />
+          </Card>
+          <ImageZoomModal
+            isOpen={isZoomModalOpen}
+            onClose={() => setIsZoomModalOpen(false)}
+            imageUrl={preview}
+          />
+        </>
       )}
 
       {extractedProducts.length > 0 && (

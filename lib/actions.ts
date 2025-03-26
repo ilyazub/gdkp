@@ -4,6 +4,65 @@ import { createClient } from "@/lib/supabase/server"
 import { cookies } from 'next/headers'
 import type { Product, OcrResult } from "@/lib/types"
 
+async function compressImage(file: File): Promise<File> {
+  const options = {
+    maxSizeMB: 1,
+    maxWidthOrHeight: 1920,
+    useWebWorker: true,
+    fileType: 'image/jpeg',
+    initialQuality: 0.8,
+  }
+
+  try {
+    // Create an image element
+    const img = new Image()
+    img.src = URL.createObjectURL(file)
+    await new Promise((resolve) => (img.onload = resolve))
+
+    // Create a canvas
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Could not get canvas context')
+
+    // Calculate new dimensions
+    let { width, height } = img
+    const maxSize = options.maxWidthOrHeight
+    if (width > height && width > maxSize) {
+      height = Math.round((height * maxSize) / width)
+      width = maxSize
+    } else if (height > maxSize) {
+      width = Math.round((width * maxSize) / height)
+      height = maxSize
+    }
+
+    // Set canvas dimensions
+    canvas.width = width
+    canvas.height = height
+
+    // Draw and compress
+    ctx.drawImage(img, 0, 0, width, height)
+    const compressedBlob = await new Promise<Blob>((resolve) => {
+      canvas.toBlob(
+        (blob) => resolve(blob || new Blob()), 
+        'image/jpeg',
+        options.initialQuality
+      )
+    })
+
+    // Clean up
+    URL.revokeObjectURL(img.src)
+
+    // Convert to File
+    return new File([compressedBlob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+      type: 'image/jpeg',
+      lastModified: Date.now(),
+    })
+  } catch (error) {
+    console.error('Error compressing image:', error)
+    return file
+  }
+}
+
 export async function searchProducts(query: string): Promise<Product[]> {
   const cookieStore = cookies()
   const supabase = createClient(cookieStore)
@@ -106,16 +165,17 @@ export async function processProductImage(formData: FormData) {
           }
         }
 
-        // Upload image to Supabase Storage
+        // Compress and upload image to Supabase Storage
+        const compressedImage = await compressImage(imageFile)
         const timestamp = Date.now()
-        const fileExt = imageFile.name.split('.').pop()
-        const filePath = `product-images/${timestamp}.${fileExt}`
+        const filePath = `product-images/${timestamp}.jpg` // Always save as JPG after compression
 
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('product-images')
-          .upload(filePath, imageFile, {
+          .upload(filePath, compressedImage, {
             cacheControl: '3600',
-            upsert: false
+            upsert: false,
+            contentType: 'image/jpeg'
           })
 
         if (uploadError) {
@@ -123,12 +183,10 @@ export async function processProductImage(formData: FormData) {
           return { success: false, message: "Failed to upload product image" }
         }
 
-        // Get public URL for the uploaded image
         const { data: { publicUrl } } = supabase.storage
           .from('product-images')
           .getPublicUrl(filePath)
 
-        // Insert all products with the image URL
         const { error: insertError } = await supabase.from("products").insert(
           products.map(product => ({
             data: {
